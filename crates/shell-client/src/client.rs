@@ -89,20 +89,25 @@ impl Client {
             *state = ConnectionState::Connecting;
         }
 
-        // Check for placeholder server destination
-        if self.config.server_destination == "0000000000000000000000000000000000000000000000000000000000000000"
-            || self.config.server_destination.is_empty() {
-            return Err(ClientError::Config(
-                "Server destination not configured. Please set server_destination in client.toml".to_string()
-            ));
-        }
-
-        info!("Connecting to server: {}", self.config.server_destination);
-
-        // Check if we have an interface
+        // Check if we have an interface (I2P or test mode)
         let interface = self.interface.as_ref().ok_or_else(|| {
             ClientError::NotConnected
         })?;
+
+        // Only validate config.server_destination if not using an interface
+        // (when using I2P, the destination is provided via register_destination)
+        if self.interface.is_none() {
+            // Check for placeholder server destination
+            if self.config.server_destination == "0000000000000000000000000000000000000000000000000000000000000000"
+                || self.config.server_destination.is_empty() {
+                return Err(ClientError::Config(
+                    "Server destination not configured. Please set server_destination in client.toml".to_string()
+                ));
+            }
+            info!("Connecting to server: {}", self.config.server_destination);
+        } else {
+            info!("Connecting to server: {}", hex::encode(self.server_destination));
+        }
 
         // Send CONNECT message
         let connect_msg = ConnectMessage {
