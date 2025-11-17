@@ -1,0 +1,34 @@
+[package]
+name = "reticulum-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+ed25519-dalek = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+bytes = { workspace = true }
+hex = { workspace = true }
+tracing = { workspace = true }
+async-trait = "0.1"
+uuid = { version = "1.6", features = ["v4"] }
+
+# Embedded I2P router - using git repo to get zip 6.0 fix
+emissary-core = { git = "https://github.com/altonen/emissary", optional = true }
+emissary-util = { git = "https://github.com/altonen/emissary", optional = true }
+base64 = { version = "0.22", optional = true }
+
+# I2P integration (placeholder - may need custom implementation)
+# i2p = { version = "0.1", optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+default = []
+embedded-router = ["dep:emissary-core", "dep:emissary-util", "dep:base64"]

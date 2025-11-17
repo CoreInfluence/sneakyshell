@@ -1,0 +1,22 @@
+# Reticulum Shell Server Configuration
+
+# Path to server identity file (will be auto-generated if it doesn't exist)
+identity_path = "server.identity"
+
+# Maximum number of concurrent client sessions
+max_sessions = 10
+
+# Default command execution timeout (seconds)
+command_timeout = 300
+
+# Enable audit logging of all executed commands
+audit_logging = true
+audit_log_path = "server-audit.log"
+
+# Allowed client identities (hex-encoded public keys)
+# Empty list = allow all clients (useful for testing)
+# To restrict access, add client public key hashes here:
+# allowed_clients = [
+#     "a3f5c8d9e2b1a7c6f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1",
+# ]
+allowed_clients = []

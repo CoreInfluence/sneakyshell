@@ -1,0 +1,36 @@
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Configuration
+*.toml.local
+config.toml
+server.toml
+client.toml
+
+# Keys and secrets
+*.key
+*.identity
+identities/
+.reticulum/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/

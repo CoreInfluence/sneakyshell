@@ -1,0 +1,15 @@
+# Reticulum Shell Client Configuration
+
+# Path to client identity file (will be auto-generated if it doesn't exist)
+identity_path = "client.identity"
+
+# Server destination hash (hex-encoded, 64 characters)
+# This will be displayed when you run the server for the first time
+# For now, leave as placeholder - server will show its destination on startup
+server_destination = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# Connection timeout (seconds)
+connection_timeout = 30
+
+# Command execution timeout (seconds)
+command_timeout = 300
