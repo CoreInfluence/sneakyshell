@@ -73,6 +73,8 @@ pub struct EmbeddedRouter {
 impl EmbeddedRouter {
     /// Create and start a new embedded I2P router
     pub async fn new(config: EmbeddedRouterConfig) -> Result<Self> {
+        use rand::RngCore;
+
         info!("Initializing embedded I2P router");
         info!("Data directory: {:?}", config.data_dir);
 
@@ -81,17 +83,61 @@ impl EmbeddedRouter {
             NetworkError::I2p(format!("Failed to create data directory: {}", e))
         })?;
 
-        // Configure Emissary router with SAM support
-        let mut emissary_config = EmissaryConfig::default();
+        // Generate random keys for NTCP2 transport
+        let mut rng = rand::thread_rng();
+        let mut ntcp2_iv = [0u8; 16];
+        let mut ntcp2_key = [0u8; 32];
+        rng.fill_bytes(&mut ntcp2_iv);
+        rng.fill_bytes(&mut ntcp2_key);
 
-        // Configure SAM if requested
-        if config.sam_tcp_port.is_some() || config.sam_udp_port.is_some() {
-            emissary_config.samv3_config = Some(emissary_core::SamConfig {
+        // Download initial router infos from reseed servers
+        info!("Downloading initial router information from I2P reseed servers...");
+        info!("This may take 30-60 seconds on first run");
+
+        let router_infos = match emissary_util::reseeder::Reseeder::reseed(None, true).await {
+            Ok(routers) => {
+                info!("Successfully downloaded {} router infos", routers.len());
+                routers.into_iter()
+                    .map(|reseed_info| reseed_info.router_info)
+                    .collect::<Vec<Vec<u8>>>()
+            }
+            Err(e) => {
+                return Err(NetworkError::I2p(format!(
+                    "Failed to download router infos from reseed servers: {}. \
+                    Please check your internet connection.",
+                    e
+                )));
+            }
+        };
+
+        // Configure Emissary router with transports and SAM
+        let emissary_config = EmissaryConfig {
+            // Enable NTCP2 transport (TCP-based, works better through firewalls)
+            ntcp2: Some(emissary_core::Ntcp2Config {
+                port: config.listen_port,
+                iv: ntcp2_iv,
+                key: ntcp2_key,
+                host: None, // Listen on all interfaces
+                publish: true,
+            }),
+            // Disable SSU2 for now (UDP-based, can be enabled later if needed)
+            ssu2: None,
+            // Configure SAM
+            samv3_config: Some(emissary_core::SamConfig {
                 tcp_port: config.sam_tcp_port.unwrap_or(0),
                 udp_port: config.sam_udp_port.unwrap_or(0),
                 host: "127.0.0.1".to_string(),
-            });
-        }
+            }),
+            // Enable local addresses for testing
+            allow_local: true,
+            // Enable insecure tunnels for faster startup (can be disabled in production)
+            insecure_tunnels: true,
+            // Floodfill configuration
+            floodfill: config.enable_floodfill,
+            // Provide initial router infos for bootstrapping
+            routers: router_infos,
+            ..Default::default()
+        };
 
         debug!("Starting Emissary router with Tokio runtime");
 
@@ -130,13 +176,22 @@ impl EmbeddedRouter {
 
     /// Wait for the router to be ready (tunnels established)
     pub async fn wait_ready(&self) -> Result<()> {
-        info!("Waiting for I2P tunnels to establish (may take 30-60 seconds)...");
+        info!("Waiting for I2P tunnels to establish...");
+        info!("First-time bootstrap may take 2-5 minutes while finding peers");
+        info!("The router will continue building tunnels in the background");
 
-        // TODO: Implement proper ready check using Emissary's API
-        // For now, just wait a fixed duration
-        tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+        // Wait for initial tunnel building attempts
+        // Note: First-time bootstrap can take 2-5 minutes as the router:
+        // 1. Tries to connect to various peers from the router infos
+        // 2. Many peers may be unreachable (stale, behind NAT, etc.)
+        // 3. Needs to find at least 2-3 reachable peers per tunnel
+        // 4. Publishes its own router info to the network
+        //
+        // The router continues trying in the background even after this wait
+        tokio::time::sleep(tokio::time::Duration::from_secs(90)).await;
 
-        info!("I2P router ready");
+        info!("I2P router initialization complete");
+        info!("Note: Tunnel establishment continues in background - first connections may be slow");
         Ok(())
     }
 

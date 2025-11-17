@@ -183,6 +183,58 @@ Distributed database storing:
 2. I2P provides network-layer anonymity & anti-surveillance
 3. Together: End-to-end encrypted + anonymous
 
+### Embedded I2P Router (Emissary)
+
+**What is Emissary?**
+A pure Rust implementation of the I2P protocol, integrated directly into reticulum-shell.
+
+**Key Features:**
+- SAM v3 server for internal communication
+- NTCP2 transport for router-to-router communication
+- Automatic HTTPS reseeding for bootstrapping
+- NetDB management for peer discovery
+- Tunnel building and management
+
+#### Bootstrapping Process
+
+The embedded router bootstraps using I2P's reseed mechanism:
+
+**Step 1: Reseed (30-60 seconds)**
+```
+1. Connect to HTTPS reseed server (e.g., reseed.stormycloud.org)
+2. Download SU3 file (~100 router infos)
+3. Verify cryptographic signatures
+4. Extract router infos (peer network addresses + public keys)
+```
+
+**Step 2: Router Initialization**
+```
+1. Load 100 router infos into NetDB
+2. Identify 60-70 floodfill routers
+3. Start SAM server on random port
+4. Begin NTCP2 listener
+```
+
+**Step 3: Tunnel Building (90-240 seconds)**
+```
+1. Select peers from NetDB
+2. Attempt NTCP2 connections (many fail: NAT, offline, etc.)
+3. Build exploratory tunnels (2-hop inbound/outbound)
+4. Publish own router info to floodfills
+5. Continue building tunnels in background
+```
+
+**Security:**
+- Reseed servers use HTTPS with certificate validation
+- Router infos are cryptographically signed by I2P developers
+- No trust required in individual reseed servers (multiple sources)
+- SU3 format provides tamper-evident packaging
+
+**Performance:**
+- First run: 2-5 minutes (download + peer discovery)
+- Subsequent runs: 30-90 seconds (cached peers)
+- Memory usage: 64-256 MB depending on tunnel quantity
+
 ## Wire Protocol (shell-proto)
 
 ### Protocol Overview

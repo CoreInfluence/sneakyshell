@@ -108,14 +108,14 @@ impl I2pInterface {
 
         let mut sam = crate::sam::SamConnection::connect(sam_addr).await?;
 
-        // Generate I2P destination
+        // Generate I2P destination (returns PRIV key with both public and private)
         let destination = sam.dest_generate().await?;
         tracing::info!("Generated I2P destination: {}...", &destination[..20]);
 
         // Create session ID
         let session_id = format!("retic-{}", uuid::Uuid::new_v4());
 
-        // Create DATAGRAM session
+        // Create DATAGRAM session with the generated destination
         sam.session_create_datagram(&session_id, Some(&destination)).await?;
 
         // Compute our own destination hash

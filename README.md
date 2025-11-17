@@ -168,7 +168,10 @@ INFO I2P destination: ABCDEFGHIJKLMNOPQRSTUVWXYZabc...
 - ✅ Works out of the box
 - ✅ Perfect for testing and portable deployments
 
-**First connection takes 30-60 seconds while tunnels establish - be patient!**
+**First connection takes 2-5 minutes for initial bootstrap:**
+- Downloading router infos: 30-60 seconds
+- Building I2P tunnels: 90-240 seconds
+- Subsequent connections are much faster (30-90 seconds)
 
 **See [docs/EMBEDDED-ROUTER.md](docs/EMBEDDED-ROUTER.md) for complete embedded router guide.**
 

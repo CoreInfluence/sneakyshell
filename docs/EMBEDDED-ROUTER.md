@@ -116,19 +116,26 @@ cargo build --release --features embedded-router
   --use-embedded-router
 
 # Server will:
-# 1. Start embedded I2P router
-# 2. Wait 30-60 seconds for tunnels to establish
-# 3. Display I2P destination for clients
+# 1. Download initial router infos from I2P reseed servers (30-60 seconds)
+# 2. Start embedded I2P router with 100 router infos
+# 3. Wait for tunnels to establish (2-5 minutes on first run)
+# 4. Display I2P destination for clients
 ```
 
 **Expected output:**
 ```
 INFO  Initializing embedded I2P router
 INFO  Data directory: ".reticulum-shell/i2p"
+INFO  Downloading initial router information from I2P reseed servers...
+INFO  This may take 30-60 seconds on first run
+INFO  reseed succeeded server="https://reseed.stormycloud.org/" num_routers=100
+INFO  Successfully downloaded 100 router infos
 INFO  Embedded I2P router started successfully
 INFO  SAM TCP port: 37421
-INFO  Waiting for I2P tunnels to establish (may take 30-60 seconds)...
-INFO  I2P router ready
+INFO  Waiting for I2P tunnels to establish...
+INFO  First-time bootstrap may take 2-5 minutes while finding peers
+INFO  The router will continue building tunnels in the background
+INFO  I2P router initialization complete
 INFO  Connecting to embedded router via SAM...
 INFO  I2P interface created successfully
 INFO  I2P destination: ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789...
@@ -148,9 +155,10 @@ INFO  Listening on Reticulum network...
   --i2p-destination "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789..."
 
 # Client will:
-# 1. Start its own embedded I2P router
-# 2. Wait for tunnels
-# 3. Connect to server via I2P
+# 1. Download router infos from reseed servers (30-60 seconds)
+# 2. Start its own embedded I2P router
+# 3. Wait for tunnels (2-5 minutes on first run)
+# 4. Connect to server via I2P
 ```
 
 **Expected output:**
@@ -390,7 +398,7 @@ EOF
 # 2. Connect to server
 ./shell-client --config client.toml
 
-# 3. Wait for connection (30-60 seconds first time)
+# 3. Wait for connection (2-5 minutes first time, 30-90 seconds subsequently)
 # 4. Use interactive REPL
 reticulum-shell> ls
 reticulum-shell> hostname
@@ -561,7 +569,8 @@ ERROR Failed to start embedded router: Failed to start router: ...
 
 **Symptom:**
 ```
-INFO  Waiting for I2P tunnels to establish (may take 30-60 seconds)...
+INFO  Waiting for I2P tunnels to establish...
+INFO  First-time bootstrap may take 2-5 minutes while finding peers
 (hangs forever)
 ```
 
@@ -590,7 +599,10 @@ INFO  Waiting for I2P tunnels to establish (may take 30-60 seconds)...
    ```
 
 3. **Bootstrapping on First Run**
-   - First run takes 1-3 minutes to bootstrap
+   - First run takes 2-5 minutes to bootstrap:
+     - Downloading 100 router infos from HTTPS reseed servers: 30-60 seconds
+     - Finding reachable I2P peers and building tunnels: 90-240 seconds
+   - Subsequent runs are much faster (30-90 seconds) using cached peer information
    - Router needs to discover peers
    - Be patient on initial startup
 
@@ -800,8 +812,11 @@ bandwidth_limit_kbps = 16384     # 16 MB/s
 
 ### Startup Time Optimization
 
-**First Run:** 1-3 minutes (bootstrapping)
-**Subsequent Runs:** 30-60 seconds (cached NetDB)
+**First Run:** 2-5 minutes (reseeding + bootstrapping + tunnel building)
+- Reseed download: 30-60 seconds
+- Tunnel establishment: 90-240 seconds
+
+**Subsequent Runs:** 30-90 seconds (cached NetDB + peer connections)
 
 ```bash
 # Keep data directory persistent across runs
@@ -845,12 +860,56 @@ data_dir = "/persistent/storage/i2p"  # Not in temp directory
          └────────────────┘
 ```
 
+### Automatic Reseeding Process
+
+The embedded router automatically bootstraps using I2P's reseed mechanism:
+
+**What is Reseeding?**
+- Downloads initial router information from trusted HTTPS servers
+- Provides the router with knowledge of I2P network topology
+- Required for first-time bootstrap (no cached peer data)
+
+**Reseed Servers Used:**
+```
+https://reseed.stormycloud.org/
+https://reseed-pl.i2pd.xyz/
+https://reseed-fr.i2pd.xyz/
+https://www2.mk16.de/
+https://reseed2.i2p.net/
+https://banana.incognet.io/
+https://reseed.diva.exchange/
+https://reseed.i2pgit.org/
+https://i2p.novg.net/
+https://reseed.onion.im/
+https://reseed.memcpy.io/
+https://i2pseed.creativecowpat.net:8443/
+```
+
+**Reseed Process:**
+1. Router tries random reseed server from the list
+2. Downloads SU3 file containing ~100 router infos
+3. Verifies digital signatures using embedded certificates
+4. Extracts router infos (peer network addresses and public keys)
+5. Loads into NetDB for peer discovery
+6. Retries with different server if download fails
+
+**Security:**
+- All reseed downloads use HTTPS with certificate validation
+- Router infos are cryptographically signed
+- No trust required in individual reseed servers
+- Multiple independent reseed servers for redundancy
+
 ### Communication Flow
 
 1. **Startup:**
-   - EmbeddedRouter creates Emissary instance
+   - Download 100 router infos from HTTPS reseed servers (30-60 seconds)
+   - EmbeddedRouter creates Emissary instance with downloaded router infos
    - Emissary starts SAM server on random port
-   - Router begins bootstrapping (NetDB, tunnels)
+   - Router begins bootstrapping:
+     - Loads 100 router infos into NetDB
+     - Identifies 60-70 floodfill routers
+     - Attempts connections to peers for tunnel building
+     - Publishes own router info to floodfills
 
 2. **Connection Establishment:**
    - I2pInterface connects to local SAM port
@@ -869,7 +928,7 @@ data_dir = "/persistent/storage/i2p"  # Not in temp directory
 | **Configuration** | Minimal | SAM bridge setup |
 | **Dependencies** | None | External process |
 | **Memory** | 64-256 MB | 128-512 MB (i2pd) |
-| **Startup Time** | 30-60 seconds | Already running |
+| **Startup Time** | 2-5 min (first), 30-90 sec (subsequent) | Already running |
 | **Shared Usage** | No | Yes (multiple apps) |
 | **Control** | Full | Limited |
 | **Portability** | Excellent | Requires install |

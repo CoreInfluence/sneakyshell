@@ -17,7 +17,9 @@
       "WebFetch(domain:docs.i2pd.website)",
       "Bash(cargo fetch:*)",
       "Bash(cargo doc:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(find:*)",
+      "Bash(timeout 120 ./target/release/shell-server:*)"
     ],
     "deny": [],
     "ask": []

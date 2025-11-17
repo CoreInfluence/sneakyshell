@@ -88,11 +88,12 @@ impl SamConnection {
             )));
         }
 
-        // Extract PUB from response
+        // Extract PRIV from response (contains both public and private keys)
         // Format: DEST REPLY PUB=base64string PRIV=base64string
+        // We need PRIV for creating persistent sessions with Emissary
         for part in response.split_whitespace() {
-            if let Some(pub_key) = part.strip_prefix("PUB=") {
-                return Ok(pub_key.to_string());
+            if let Some(priv_key) = part.strip_prefix("PRIV=") {
+                return Ok(priv_key.to_string());
             }
         }
 
@@ -114,8 +115,10 @@ impl SamConnection {
             None => "DESTINATION=TRANSIENT".to_string(),
         };
 
+        // Emissary SAM requires PORT and HOST for forwarded datagrams
+        // Use port 0 to let the system choose a random port
         let command = format!(
-            "SESSION CREATE STYLE=DATAGRAM ID={} {} SIGNATURE_TYPE=7\n",
+            "SESSION CREATE STYLE=DATAGRAM ID={} {} SIGNATURE_TYPE=7 PORT=0 HOST=127.0.0.1 FROM_PORT=0\n",
             session_id, dest_param
         );
 

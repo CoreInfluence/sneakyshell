@@ -97,6 +97,23 @@ shell-client ────────┘
 - Reticulum handles packet routing and crypto
 - I2P handles anonymity and anti-surveillance
 
+**I2P Router Options:**
+
+1. **Embedded Router (Emissary)** - Feature: `embedded-router`
+   - Pure Rust I2P implementation
+   - Zero external dependencies
+   - Automatic HTTPS reseeding for bootstrap
+   - Single-binary deployment
+   - 64-256 MB memory footprint
+   - First run: 2-5 minutes (reseed + tunnel building)
+   - Subsequent runs: 30-90 seconds
+
+2. **External Router (i2pd/Java I2P)**
+   - Traditional SAM-based integration
+   - Requires separate I2P router process
+   - Suitable for shared I2P usage
+   - Lower startup overhead (router already running)
+
 ### 4. Async Runtime: Tokio
 
 **Rationale:**

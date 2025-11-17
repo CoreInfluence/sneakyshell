@@ -18,8 +18,9 @@ reticulum-shell/
 │   │   │   ├── lib.rs                # Public API exports
 │   │   │   ├── identity.rs           # Reticulum identity management
 │   │   │   ├── packet.rs             # Packet structure and parsing
-│   │   │   ├── interface.rs          # Network interface abstraction
-│   │   │   ├── i2p.rs                # I2P transport implementation
+│   │   │   ├── interface.rs          # Network interface abstraction (MockInterface, I2pInterface)
+│   │   │   ├── sam.rs                # SAM v3 protocol client implementation
+│   │   │   ├── embedded_router.rs    # Embedded I2P router (Emissary) wrapper
 │   │   │   └── error.rs              # Error types for networking
 │   │   └── tests/
 │   │       └── integration_tests.rs  # Network stack tests
@@ -102,7 +103,10 @@ reticulum-shell/
 ### Network Transport
 - **File:** `crates/reticulum-core/src/lib.rs`
 - **API:** Public interface for sending/receiving Reticulum packets
-- **I2P Integration:** `crates/reticulum-core/src/i2p.rs`
+- **I2P Integration:**
+  - `crates/reticulum-core/src/interface.rs` - Network interface abstraction
+  - `crates/reticulum-core/src/sam.rs` - SAM v3 protocol client
+  - `crates/reticulum-core/src/embedded_router.rs` - Embedded router (feature: embedded-router)
 
 ## Module Responsibilities
 
@@ -110,13 +114,19 @@ reticulum-shell/
 **Purpose:** Low-level Reticulum networking over I2P
 - Identity creation and management
 - Packet encoding/decoding
-- I2P socket interface
+- Network interface abstraction (MockInterface for testing, I2pInterface for production)
+- SAM v3 protocol client for I2P router communication
+- Embedded I2P router integration (optional feature)
 - Connection lifecycle
 
 **Key Types:**
 - `Identity` - Reticulum identity (public/private keypair)
 - `Packet` - Network packet structure
-- `I2pInterface` - I2P transport layer
+- `NetworkInterface` - Trait for transport abstraction
+- `MockInterface` - In-memory testing interface
+- `I2pInterface` - I2P transport layer via SAM protocol
+- `SamConnection` - Low-level SAM v3 client
+- `EmbeddedRouter` - Emissary-based embedded I2P router (feature: embedded-router)
 - `Destination` - Reticulum destination address
 
 ### shell-proto
@@ -212,7 +222,10 @@ error!(error = ?e, "Command failed");
 ### To Find...
 - **Message definitions:** `crates/shell-proto/src/messages.rs`
 - **Command execution:** `crates/shell-server/src/shell.rs`
-- **I2P integration:** `crates/reticulum-core/src/i2p.rs`
+- **I2P integration:**
+  - `crates/reticulum-core/src/interface.rs` - Interface abstraction
+  - `crates/reticulum-core/src/sam.rs` - SAM protocol
+  - `crates/reticulum-core/src/embedded_router.rs` - Embedded router
 - **Error types:** `*/src/error.rs` in each crate
 - **Configuration:** `*/src/config.rs` in server/client
 - **Tests:** `*/tests/*.rs` in each crate
@@ -240,6 +253,7 @@ error!(error = ?e, "Command failed");
 4. Add tests in relevant `tests/` directories
 
 ### Modifying I2P Behavior
-1. Edit `reticulum-core/src/i2p.rs`
-2. Update interface in `reticulum-core/src/interface.rs`
-3. Test with integration tests in `reticulum-core/tests/`
+1. For interface changes: Edit `reticulum-core/src/interface.rs`
+2. For SAM protocol: Edit `reticulum-core/src/sam.rs`
+3. For embedded router: Edit `reticulum-core/src/embedded_router.rs`
+4. Test with integration tests in `reticulum-core/tests/`
