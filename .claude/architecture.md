@@ -4,25 +4,36 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Reticulum Network                        │
-│                      (over I2P)                              │
+│                    Application Layer                         │
+│              shell-client / shell-server                     │
 └─────────────────────────────────────────────────────────────┘
-              ↑                            ↑
-              │                            │
-    ┌─────────┴─────────┐      ┌──────────┴──────────┐
-    │   Shell Server    │      │    Shell Client     │
-    │  (Listener/       │      │   (Connector/       │
-    │   Executor)       │      │    REPL)            │
-    └─────────┬─────────┘      └──────────┬──────────┘
-              │                            │
-              │                            │
-    ┌─────────┴─────────┐      ┌──────────┴──────────┐
-    │  Reticulum Core   │      │  Reticulum Core     │
-    │   - Identity      │      │   - Identity        │
-    │   - I2P Transport │      │   - I2P Transport   │
-    │   - Packet Mgmt   │      │   - Packet Mgmt     │
-    └───────────────────┘      └─────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                   Reticulum Protocol                         │
+│  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌───────────────┐  │
+│  │ Identity │  │   Link   │  │ Packet  │  │   Transport   │  │
+│  │ X25519   │  │ Channels │  │ Routing │  │  Path Table   │  │
+│  │ Ed25519  │  │ Forward  │  │ Announce│  │  Link Table   │  │
+│  │ Ratchet  │  │ Secrecy  │  │ Proof   │  │  Routing      │  │
+│  └─────────┘  └──────────┘  └─────────┘  └───────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                   Transport Interfaces                       │
+│    ┌─────┐    ┌─────┐    ┌───────┐    ┌───────────────┐     │
+│    │ I2P │    │ TCP │    │  UDP  │    │  Local (IPC)  │     │
+│    │ SAM │    │HDLC │    │       │    │  Unix Socket  │     │
+│    └─────┘    └─────┘    └───────┘    └───────────────┘     │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+### Component Responsibilities
+
+- **Identity:** X25519 (encryption) + Ed25519 (signatures) dual-keypair system
+- **Link:** Encrypted bidirectional channels with forward secrecy via ratchet keys
+- **Packet:** Wire format serialization, all packet types (DATA, ANNOUNCE, LINKREQUEST, PROOF)
+- **Transport:** Path table, link table, routing, announce propagation
+- **Interfaces:** Pluggable transports (I2P primary, TCP/UDP planned)
 
 ## Crate Architecture
 
@@ -78,24 +89,31 @@ shell-client ────────┘
 - ❌ No interactive programs (vim, top, etc.)
 - ❌ No job control
 
-### 3. Network Stack: Reticulum over I2P
+### 3. Network Stack: Full Reticulum Protocol
 
-**Reticulum Benefits:**
-- Built-in encryption and authentication
-- Identity-based routing (no IP addresses)
-- Resilient mesh networking
-- Perfect for anonymous communications
+**Full Rust Implementation:**
+This project implements the complete Reticulum network protocol in Rust, aiming for wire-format compatibility with the Python reference implementation.
 
-**I2P Benefits:**
+**Reticulum Protocol Features:**
+- X25519 + Ed25519 dual-keypair identities
+- ECIES encryption with Token cipher (AES-256-CBC + HMAC)
+- Link-based channels with forward secrecy via ratchet keys
+- 3-packet handshake for link establishment
+- Announce/path discovery for mesh routing
+- Resource transfer system for large data
+- 500-byte network MTU
+
+**I2P as Primary Transport:**
 - Anonymous routing layer
 - Resistant to traffic analysis
 - Decentralized infrastructure
 - Suitable for security research
 
 **Integration Strategy:**
-- Use I2P as transport interface for Reticulum
-- Reticulum handles packet routing and crypto
-- I2P handles anonymity and anti-surveillance
+- Implement full Reticulum protocol stack in reticulum-core
+- I2P wrapped in Reticulum Interface trait
+- Future transports (TCP, UDP) also use Interface trait
+- Wire-compatible with Python Reticulum network
 
 **I2P Router Options:**
 
@@ -135,51 +153,74 @@ shell-client ────────┘
 - MessagePack: Larger message sizes
 - JSON: Too verbose for binary protocol
 
-### 6. Authentication: Reticulum Native Identities
+### 6. Authentication: Reticulum Dual-Keypair Identities
 
 **Rationale:**
-- Built into Reticulum protocol
-- Ed25519 cryptographic signatures
-- No separate auth layer needed
-- Automatic key management
+- Full Reticulum identity system with two keypairs per identity
+- X25519 for encryption and key exchange (ECDH)
+- Ed25519 for digital signatures and authentication
+- 128-bit truncated hash addressing
+- Ratchet keys for forward secrecy
+
+**Identity Structure:**
+```rust
+pub struct Identity {
+    pub x25519_public: [u8; 32],   // Encryption
+    pub ed25519_public: [u8; 32],  // Signatures
+    pub hash: [u8; 16],            // Truncated address
+}
+```
 
 **Security Properties:**
-- Server verifies client identity
-- Client verifies server identity
-- Prevents MITM attacks
-- Perfect forward secrecy (depending on Reticulum implementation)
+- Mutual identity verification via signatures
+- ECIES encryption for single destinations
+- Link-based forward secrecy via ECDH + HKDF
+- Ratchet keys rotated every 30 minutes
+- Prevents MITM attacks via cryptographic proofs
 
 ## Protocol Design
 
-### Message Flow
+### Reticulum Link-Based Communication
+
+Shell commands are sent over established **Reticulum Links** for forward secrecy:
 
 ```
-1. Connection Establishment
-   Client → Server: CONNECT (with identity)
-   Server → Client: ACCEPT or REJECT
+1. Link Establishment (3-packet handshake, 297 bytes)
+   Client → Server: LINKREQUEST (X25519 + Ed25519 public keys)
+   Server → Client: PROOF (signature over link_id + keys)
+   Client → Server: RTT measurement
+   Link becomes ACTIVE
 
-2. Command Execution
-   Client → Server: COMMAND_REQUEST {id, cmd, args}
-   Server → Client: COMMAND_RESPONSE {id, stdout, stderr, exit_code}
+2. Command Execution (over Link)
+   Client → Server: DATA packet with COMMAND_REQUEST
+   Server → Client: DATA packet with COMMAND_RESPONSE
+   (Large outputs use Resource transfer)
 
-3. Session Management
-   Client → Server: DISCONNECT
-   Server → Client: ACK
+3. Link Teardown
+   Either → Either: LinkClose context packet
 ```
 
-### Message Types (shell-proto)
+### Reticulum Packet Types
 
 ```rust
-enum Message {
-    Connect { client_identity: Identity },
-    Accept { server_identity: Identity, session_id: SessionId },
-    Reject { reason: String },
-    CommandRequest { id: u64, command: String, args: Vec<String>, env: Option<HashMap> },
-    CommandResponse { id: u64, stdout: Vec<u8>, stderr: Vec<u8>, exit_code: i32 },
-    Disconnect,
-    Ack,
+pub enum PacketType {
+    Data = 0x00,        // Standard data transmission
+    Announce = 0x01,    // Destination advertisement
+    LinkRequest = 0x02, // Link establishment
+    Proof = 0x03,       // Delivery/link confirmation
 }
 ```
+
+### Shell Message Types (over Links)
+
+```rust
+enum ShellMessage {
+    CommandRequest { id: u64, command: String, args: Vec<String>, env: Option<HashMap> },
+    CommandResponse { id: u64, stdout: Vec<u8>, stderr: Vec<u8>, exit_code: i32 },
+}
+```
+
+Shell messages are sent as DATA packets with appropriate context values over established Links.
 
 ## Security Model
 
@@ -242,14 +283,28 @@ enum ShellError {
 
 ## Future Extensibility
 
-### Phase 2 Enhancements
-- Interactive PTY support
-- File transfer (upload/download)
-- Port forwarding
-- Multiple concurrent sessions
+### Phase 4: Reticulum Protocol (Current)
+- Full protocol implementation in Rust
+- X25519 + Ed25519 identities
+- Link establishment and management
+- Path discovery and routing
+- Resource transfer system
 
-### Phase 3 Enhancements
+### Phase 5: Additional Transports
+- TCP Interface with HDLC framing
+- UDP Interface
+- Local Interface (IPC)
+- Potential: LoRa via RNode
+
+### Phase 6: Advanced Features
+- Interactive PTY support over Links
+- File transfer via Reticulum Resources
+- Multi-hop mesh routing
+- Multiple concurrent sessions
+- Interoperability with Python Reticulum network
+
+### Phase 7: Production Hardening
 - Multi-platform support (Windows, macOS)
-- Plugin system for commands
-- Advanced persistence mechanisms
 - Configurable command restrictions
+- Advanced audit logging
+- Resource quotas and rate limiting

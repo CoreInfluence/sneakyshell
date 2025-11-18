@@ -1,31 +1,52 @@
 # Reticulum-Shell
 
-A remote access tool built for cybersecurity research, enabling remote shell access to Linux systems over the Reticulum network using I2P as a transport layer.
+A remote access tool built for cybersecurity research, enabling remote shell access to Linux systems using the Reticulum network protocol with I2P as an anonymous transport layer.
 
 ## Overview
 
-Reticulum-Shell provides anonymous, encrypted remote shell access using:
+Reticulum-Shell provides anonymous, encrypted remote shell access using a **full Rust implementation of the Reticulum network protocol**:
 
-- **Reticulum Network**: Cryptography-based networking with built-in encryption and authentication
-- **I2P Transport**: Anonymous routing layer for anti-surveillance
-- **Ed25519 Signatures**: Identity-based authentication
-- **Rust**: Memory-safe implementation with async/await
+- **Reticulum Protocol**: Complete implementation of the Reticulum networking stack
+  - X25519 + Ed25519 dual-keypair identities
+  - Link-based encrypted channels with forward secrecy
+  - Announce/path discovery for mesh routing
+  - Resource transfer system for reliable data delivery
+- **Multiple Transports**: I2P (anonymous), TCP, UDP, Local IPC
+- **Rust**: Memory-safe, high-performance implementation with async/await
 
 ### Architecture
 
 ```
-┌─────────────┐         Reticulum/I2P         ┌─────────────┐
-│   Client    │ ◄──────────────────────────► │   Server    │
-│  (REPL)     │    Encrypted & Anonymous      │ (Executor)  │
-└─────────────┘                                └─────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Layer                         │
+│              shell-client / shell-server                     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                   Reticulum Protocol                         │
+│  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌───────────────┐  │
+│  │ Identity │  │   Link   │  │ Packet  │  │   Transport   │  │
+│  │ X25519   │  │ Channels │  │ Routing │  │  Path Table   │  │
+│  │ Ed25519  │  │ Forward  │  │ Announce│  │  Link Table   │  │
+│  │ Ratchet  │  │ Secrecy  │  │ Proof   │  │  Routing      │  │
+│  └─────────┘  └──────────┘  └─────────┘  └───────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                   Transport Interfaces                       │
+│    ┌─────┐    ┌─────┐    ┌───────┐    ┌───────────────┐     │
+│    │ I2P │    │ TCP │    │  UDP  │    │  Local (IPC)  │     │
+│    │ SAM │    │HDLC │    │       │    │  Unix Socket  │     │
+│    └─────┘    └─────┘    └───────┘    └───────────────┘     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 **Components:**
 
 - **shell-client**: Interactive REPL for sending commands
-- **shell-server**: Listens and executes commands
-- **shell-proto**: Shared protocol definitions
-- **reticulum-core**: Reticulum network implementation
+- **shell-server**: Listens and executes commands over Reticulum Links
+- **shell-proto**: Shell-specific message definitions
+- **reticulum-core**: Full Reticulum protocol implementation (Identity, Link, Packet, Transport, Interfaces)
 
 ## Security Research Context
 
@@ -43,24 +64,35 @@ Reticulum-Shell provides anonymous, encrypted remote shell access using:
 
 ## Features
 
-### Current
+### Current (Phase 3 Complete)
 - [x] Ed25519 identity-based authentication
-- [x] Command execution over Reticulum protocol
-- [x] Binary protocol with message framing
+- [x] Command execution with binary protocol
 - [x] Interactive REPL client
 - [x] Configurable timeouts and limits
 - [x] Security input validation
-- [x] **I2P transport integration** - Full SAM v3 implementation
-- [x] **Embedded I2P router** - No external I2P installation required (optional feature)
+- [x] **I2P transport** - Full SAM v3 implementation
+- [x] **Embedded I2P router** - No external I2P installation required
 - [x] Mock interface for local testing
 - [x] Zero-configuration deployment
 
-### Planned
+### In Progress (Phase 4: Reticulum Protocol)
+- [ ] **Full Reticulum protocol implementation in Rust**
+  - [ ] X25519 + Ed25519 dual-keypair identities
+  - [ ] ECIES encryption with Token cipher (AES-256-CBC + HMAC)
+  - [ ] Ratchet keys for forward secrecy
+  - [ ] Complete packet wire format (DATA, ANNOUNCE, LINKREQUEST, PROOF)
+  - [ ] Link establishment with 3-packet handshake
+  - [ ] Path discovery and announce propagation
+  - [ ] Resource transfer system
+  - [ ] Transport core with routing tables
+
+### Planned (Future Phases)
+- [ ] Additional transports (TCP, UDP, Local IPC)
 - [ ] Interactive PTY support (vim, top, etc.)
-- [ ] File transfer capabilities
+- [ ] File transfer via Reticulum Resources
 - [ ] Multiple concurrent sessions per server
-- [ ] Advanced audit logging with rotation
-- [ ] Command allowlist/blocklist
+- [ ] Multi-hop mesh routing
+- [ ] Interoperability with Python Reticulum reference
 
 ## Quick Start
 
@@ -120,10 +152,14 @@ That's it! The client will auto-generate its identity on first run.
 
 Output will show your I2P destination (long base64 string):
 ```
-INFO I2P destination: LS0tLS1CRUdJTiBJMlAgREVTVElOQVRJT04...
+INFO I2P destination: LS0tLS1CRUdJTiBJMlAgREVTVElOQVRJT04...  ← COPY THIS ENTIRE STRING!
+INFO I2P destination hash: 1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890
+INFO Server destination: 9795adcdb0156d76afb40e545382e5423ec16e094911fb88689cd91b171fcced
 ```
 
-**2. Copy the entire I2P destination string**
+**2. Copy the entire I2P destination string (the long base64 string)**
+
+**⚠️ IMPORTANT: Use the "I2P destination" (long base64), NOT the "Server destination" (hex hash)!**
 
 **3. Connect client:**
 ```bash
@@ -151,16 +187,24 @@ Output:
 INFO Initializing embedded I2P router
 INFO Embedded I2P router started successfully
 INFO I2P router ready
-INFO I2P destination: ABCDEFGHIJKLMNOPQRSTUVWXYZabc...
+INFO I2P destination: jWQnSctWzWmLkboVVlRaQmgn5AaMo3uxGQx3H4sxUK7jAiFRKhjj...  ← COPY THIS!
+INFO I2P destination hash: 454fc6243fc04b9874359ad6267a7df24afcb3732697af129fa5e34565deedba
+INFO Server destination: 9795adcdb0156d76afb40e545382e5423ec16e094911fb88689cd91b171fcced
 ```
+
+**⚠️ IMPORTANT: Copy the I2P destination (long base64 string), NOT the server destination hash!**
 
 **Connect client with embedded I2P:**
 ```bash
 ./target/release/shell-client \
   --enable-i2p \
   --use-embedded-router \
-  --i2p-destination "ABCDEFGHIJKLMNOPQRSTUVWXYZabc..."
+  --i2p-destination "jWQnSctWzWmLkboVVlRaQmgn5AaMo3uxGQx3H4sxUK7jAiFRKhjj..."
 ```
+
+**Common Mistake:**
+- ❌ WRONG: Using "Server destination" (short hex hash like `9795adcd...`)
+- ✅ CORRECT: Using "I2P destination" (long base64 string like `jWQnSctW...`)
 
 **Benefits:**
 - ✅ No external I2P router needed
@@ -281,26 +325,33 @@ cargo test -- --nocapture
 
 ## Protocol
 
-The wire protocol uses binary message framing:
+Reticulum-Shell uses the **Reticulum network protocol** for all communication. The wire format follows the Reticulum specification:
 
+### Packet Structure
 ```
-[ 4 bytes: length ]
-[ 1 byte: message type ]
-[ N bytes: payload (bincode) ]
+[HEADER 2 bytes] [ADDRESSES 16/32 bytes] [CONTEXT 1 byte] [DATA 0-465 bytes]
 ```
 
-**Message Types:**
-- `0x01` - CONNECT
-- `0x02` - ACCEPT
-- `0x03` - REJECT
+### Reticulum Packet Types
+- `0x00` - DATA (encrypted payload)
+- `0x01` - ANNOUNCE (destination advertisement)
+- `0x02` - LINKREQUEST (connection establishment)
+- `0x03` - PROOF (delivery/link confirmation)
+
+### Link-Based Communication
+Shell commands are sent over established **Reticulum Links**:
+1. Client requests Link to server Destination
+2. 3-packet handshake establishes encrypted channel
+3. Commands sent as Link packets with forward secrecy
+4. Large outputs transferred via Resource system
+
+### Shell Message Types (over Links)
 - `0x10` - COMMAND_REQUEST
 - `0x11` - COMMAND_RESPONSE
 - `0x20` - DISCONNECT
-- `0x21` - ACK
-- `0x30` - PING
-- `0x31` - PONG
 
-See `docs/PROTOCOL.md` for full specification.
+See [docs/RETICULUM.md](docs/RETICULUM.md) for complete Reticulum protocol specification.
+See [docs/PROTOCOL.md](docs/PROTOCOL.md) for shell-specific message details.
 
 ## Security Considerations
 
@@ -334,11 +385,16 @@ This is a personal research project. Feel free to:
 
 ## Documentation
 
-- [I2P Setup Guide](docs/I2P-SETUP.md) - **Complete guide for I2P integration**
-- [Architecture Overview](.claude/architecture.md)
-- [Code Navigation](.claude/navigation.md)
-- [Domain Concepts](.claude/concepts.md)
-- [Protocol Specification](docs/PROTOCOL.md)
+### Protocol & Architecture
+- [Reticulum Protocol Reference](docs/RETICULUM.md) - **Complete Reticulum protocol specification**
+- [Shell Protocol Specification](docs/PROTOCOL.md) - Shell-specific message format
+- [Architecture Overview](.claude/architecture.md) - System design and components
+- [Domain Concepts](.claude/concepts.md) - Reticulum terminology and concepts
+
+### Setup & Usage
+- [I2P Setup Guide](docs/I2P-SETUP.md) - External I2P router configuration
+- [Embedded Router Guide](docs/EMBEDDED-ROUTER.md) - Built-in I2P router usage
+- [Code Navigation](.claude/navigation.md) - Source code organization
 
 ## License
 
@@ -350,6 +406,8 @@ This tool is designed for authorized security testing and research purposes only
 
 ## Acknowledgments
 
-- [Reticulum Network](https://reticulum.network/) - Inspiration for the networking layer
+- [Reticulum Network](https://reticulum.network/) - Protocol specification and reference implementation
+- [markqvist/Reticulum](https://github.com/markqvist/Reticulum) - Python reference implementation
 - [I2P Project](https://geti2p.net/) - Anonymous routing infrastructure
-- Rust community for excellent async ecosystem
+- [Emissary](https://github.com/altonen/emissary) - Pure Rust I2P router
+- Rust community for excellent async and cryptography ecosystem

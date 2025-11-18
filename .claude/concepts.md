@@ -16,19 +16,48 @@ Reticulum is a cryptography-based networking stack for building resilient, distr
 ### Core Concepts
 
 #### Identity
-A Reticulum identity is an Ed25519 keypair that serves as both:
-1. The node's address on the network
-2. Authentication credentials
+A Reticulum identity consists of **two keypairs**:
+1. **X25519** (256 bits) - Asymmetric encryption and key exchange (ECDH)
+2. **Ed25519** (256 bits) - Digital signatures and authentication
 
-```
-Identity = Private Key + Public Key
-Address = Hash(Public Key)
+```rust
+struct Identity {
+    x25519_public: [u8; 32],   // Encryption key
+    ed25519_public: [u8; 32],  // Signing key
+    hash: [u8; 16],            // Truncated SHA-256 address
+}
+
+// Address derivation:
+Full Hash = SHA-256(X25519_public || Ed25519_public)  // 32 bytes
+Address = First 128 bits of Full Hash                  // 16 bytes
 ```
 
 **Usage in this project:**
-- Server has an identity (server address)
+- Server has an identity (server destination address)
 - Client has an identity (client address)
-- Both verify each other during connection
+- Both verify each other via cryptographic proofs during Link establishment
+- X25519 used for encryption, Ed25519 for signatures
+
+#### Link
+A **Link** is a bidirectional encrypted channel between two destinations with forward secrecy.
+
+```
+1. Client sends LINKREQUEST with ephemeral X25519 + Ed25519 keys
+2. Server responds with PROOF (signature over link_id + keys)
+3. Both derive shared secret via X25519 ECDH
+4. Link becomes ACTIVE with AES-256 encryption
+```
+
+**Properties:**
+- Forward secrecy via ephemeral keys
+- Derived encryption keys via HKDF
+- Automatic keepalives
+- State machine: PENDING → HANDSHAKE → ACTIVE → STALE → CLOSED
+
+**Usage in this project:**
+- Shell commands sent over Links (not raw packets)
+- Each client establishes one Link to server
+- Large outputs transferred via Resources over the Link
 
 #### Destination
 A destination is a named endpoint within Reticulum where packets can be sent.
@@ -45,15 +74,28 @@ Example: <server_identity>/shell/default
 #### Packet
 The basic unit of communication in Reticulum.
 
+**Wire Format:**
+```
+[HEADER 2 bytes] [ADDRESSES 16/32 bytes] [CONTEXT 1 byte] [DATA 0-465 bytes]
+```
+
+**Packet Types:**
+- `DATA (0x00)` - Standard encrypted data
+- `ANNOUNCE (0x01)` - Destination advertisement
+- `LINKREQUEST (0x02)` - Link establishment
+- `PROOF (0x03)` - Delivery/link confirmation
+
 **Properties:**
-- Encrypted with recipient's public key
-- Signed with sender's private key
-- Automatically routed through the mesh
-- Variable size (up to ~400 bytes efficient, larger requires fragmentation)
+- Network MTU: 500 bytes
+- Encrypted MDU: 383 bytes (after headers + encryption overhead)
+- ECIES encryption for SINGLE destinations
+- Link-derived keys for LINK packets
+- Signed with sender's Ed25519 key
 
 **Usage in this project:**
-- Our protocol messages are encapsulated in Reticulum packets
-- Large command outputs may require packet fragmentation
+- Shell messages sent as DATA packets over Links
+- Server announces destination with ANNOUNCE packets
+- Client establishes Link via LINKREQUEST/PROOF exchange
 
 #### Transport Interface
 An interface provides connectivity over a specific medium.
@@ -372,11 +414,16 @@ Client                                Server
 
 ### Cryptographic Primitives
 
-**Reticulum Identity (Ed25519):**
-- Key size: 256 bits
-- Signature size: 512 bits
-- Fast verification
-- Collision resistant
+**Reticulum Identity (Dual-Keypair):**
+- X25519: 256-bit Curve25519 ECDH for encryption/key exchange
+- Ed25519: 256-bit EdDSA for signatures
+- 128-bit truncated SHA-256 for addresses
+
+**Reticulum Encryption:**
+- ECIES: Ephemeral X25519 + HKDF + Token cipher
+- Token cipher: AES-256-CBC + HMAC-SHA256
+- Key derivation: HKDF-SHA256
+- Forward secrecy via ratchet keys (rotated every 30 minutes)
 
 **I2P Encryption:**
 - ElGamal/AES+SessionTags for tunnel encryption
@@ -495,12 +542,30 @@ fn execute_pty(request: CommandRequest) -> PtySession {
 
 ## Glossary
 
+### Reticulum Terms
+- **Announce:** Packet advertising a destination to the network
 - **Aspect:** Reticulum destination property (like a sub-address)
-- **Garlic Routing:** I2P's onion routing with message bundling
-- **Identity:** Ed25519 keypair used as network address
-- **Lease:** Time-limited route in I2P NetDB
-- **Packet:** Basic Reticulum message unit
-- **PTY:** Pseudo-terminal for interactive shells
+- **Destination:** Named endpoint addressable on the network
+- **ECIES:** Elliptic Curve Integrated Encryption Scheme
+- **HKDF:** HMAC-based Key Derivation Function
+- **Identity:** X25519 + Ed25519 keypair used as network address
+- **Link:** Bidirectional encrypted channel with forward secrecy
+- **Packet:** Basic Reticulum message unit (max 500 bytes)
+- **Path Table:** Routing table mapping destinations to next hops
+- **Proof:** Cryptographic confirmation of delivery or link establishment
+- **Ratchet Key:** Rotating X25519 key for forward secrecy
+- **Resource:** Large data transfer over a Link with chunking
 - **Reticulum:** Cryptography-based networking stack
-- **Session:** A connected client-server relationship
+- **Token Cipher:** AES-256-CBC + HMAC-SHA256 encryption format
+
+### I2P Terms
+- **Garlic Routing:** I2P's onion routing with message bundling
+- **Lease:** Time-limited route in I2P NetDB
+- **NetDB:** I2P distributed database of router/destination info
+- **Reseed:** Process of downloading initial router infos via HTTPS
+- **SAM:** Simple Anonymous Messaging protocol for applications
 - **Tunnel:** Encrypted I2P path for routing messages
+
+### General Terms
+- **PTY:** Pseudo-terminal for interactive shells
+- **Session:** A connected client-server relationship

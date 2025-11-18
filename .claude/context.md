@@ -1,24 +1,24 @@
 # Reticulum-Shell Project Context
 
-**Last Updated:** 2025-11-16
+**Last Updated:** 2025-11-17
 
 ## Project Overview
 
-Reticulum-Shell is a remote access tool built for cybersecurity research. It enables remote shell access to Linux systems over the Reticulum network using I2P as a transport layer.
+Reticulum-Shell is a remote access tool built for cybersecurity research. It provides remote shell access to Linux systems using a **full Rust implementation of the Reticulum network protocol** with I2P as an anonymous transport layer.
 
 **Key Features:**
-- Server listens on Reticulum network
-- Client connects and establishes connection
-- Server gains remote bash shell on client
-- Anonymous routing via I2P
+- Full Reticulum protocol implementation in Rust
+- X25519 + Ed25519 dual-keypair identities
+- Link-based encrypted channels with forward secrecy
+- Announce/path discovery for mesh routing
+- Multiple transports: I2P, TCP, UDP, Local IPC
 - Embedded I2P router (no external dependencies)
-- Cryptographic authentication via Reticulum identities
 - Zero-configuration deployment
 
 ## Current Status
 
-**Phase:** Phase 3 Complete - Embedded Router ✅
-**Progress:** Full embedded I2P router with automatic reseeding, production ready
+**Phase:** Phase 4 - Reticulum Protocol Implementation 🚧
+**Progress:** Documentation complete, implementation starting
 
 ### Completed
 
@@ -93,27 +93,64 @@ Reticulum-Shell is a remote access tool built for cybersecurity research. It ena
 - Memory: 64-256 MB depending on tunnel quantity
 - Single-binary deployment with zero external dependencies
 
-### Upcoming (Phase 4+)
-- [ ] End-to-end testing over real I2P network (requires I2P router)
+### Phase 4 - Reticulum Protocol Implementation (In Progress)
+
+#### 4.1 Core Protocol Foundation
+- [ ] X25519 key exchange (add x25519-dalek)
+- [ ] HKDF key derivation (add hkdf crate)
+- [ ] AES-256-CBC + HMAC Token cipher
+- [ ] ECIES encryption scheme
+- [ ] Dual-keypair Identity system
+- [ ] Complete packet wire format
+
+#### 4.2 Transport Layer & Routing
+- [ ] Transport core with path table
+- [ ] Interface trait abstraction
+- [ ] Announce/path discovery
+- [ ] Message routing logic
+
+#### 4.3 Link Establishment
+- [ ] Link state machine
+- [ ] 3-packet handshake
+- [ ] Key derivation (HKDF)
+- [ ] Keepalive management
+
+#### 4.4 I2P Transport Integration
+- [ ] Wrap existing SAM code in Interface trait
+- [ ] HDLC/KISS framing
+- [ ] Destination mapping
+
+#### 4.5 Resource Transfer
+- [ ] Chunking system
+- [ ] Sliding window transfer
+- [ ] BZ2 compression
+
+#### 4.6 Shell Integration
+- [ ] Update shell-proto for Links
+- [ ] Commands over Link channels
+- [ ] Large outputs via Resources
+
+### Future Phases
+- [ ] Additional transports (TCP, UDP, Local IPC)
 - [ ] Interactive PTY support (vim, top, etc.)
-- [ ] File transfer capabilities
-- [ ] Multiple concurrent sessions per server
-- [ ] Advanced security hardening
-- [ ] Command allowlist/blocklist
-- [ ] Audit log encryption
+- [ ] File transfer via Reticulum Resources
+- [ ] Multi-hop mesh routing
+- [ ] Interoperability testing with Python Reticulum
 
 ## Known Issues & Decisions
 
 1. **Language Choice:** Rust selected for memory safety, performance, and strong async ecosystem
 2. **Shell Model:** Starting with command execution model (not interactive PTY) for MVP
-3. **Authentication:** Using Reticulum's native identity system (Ed25519)
-4. **I2P Integration:** Custom SAM v3 implementation (existing Rust libraries were outdated/incomplete)
-5. **Destination Hashing:** SHA-256 hash of I2P destination strings to fit 32-byte DestinationHash format
-6. **Transport Abstraction:** NetworkInterface trait allows MockInterface (testing) and I2pInterface (production)
+3. **Reticulum Protocol:** Full Rust implementation for wire compatibility with Python reference
+4. **Identity System:** Dual-keypair (X25519 + Ed25519) as per Reticulum specification
+5. **I2P Integration:** Custom SAM v3 implementation wrapped in Reticulum Interface trait
+6. **Transport Abstraction:** Reticulum Interface trait allows I2P, TCP, UDP, Local transports
 7. **Embedded Router:** Emissary (pure Rust I2P) selected for zero-dependency deployment
 8. **Git Dependencies:** Using Emissary from GitHub to get zip 6.0 fix (not yet on crates.io)
 9. **Reseeding:** Automatic HTTPS reseed on first run for network bootstrap (100 router infos)
 10. **Bootstrap Timing:** First run 2-5 minutes (normal for I2P), subsequent runs 30-90 seconds
+11. **Wire Compatibility:** All packets must be byte-exact with Python Reticulum implementation
+12. **Link-Based Communication:** Shell commands sent over Reticulum Links for forward secrecy
 
 ## Quick Start
 
@@ -176,9 +213,20 @@ This project is developed for:
 
 ## Next Steps
 
-1. Complete Cargo workspace setup
-2. Define wire protocol messages
-3. Implement Reticulum packet handling
-4. Build basic server/client communication
-5. Add command execution capabilities
-6. Security review and testing
+### Immediate (Phase 4.1)
+1. Add cryptographic dependencies (x25519-dalek, hkdf, aes, cbc, hmac)
+2. Implement dual-keypair Identity system
+3. Implement ECIES encryption with Token cipher
+4. Define Reticulum packet structures
+
+### Short-term (Phase 4.2-4.3)
+5. Implement Transport core with routing tables
+6. Create Interface trait abstraction
+7. Implement Link state machine and handshake
+8. Add announce/path discovery
+
+### Medium-term (Phase 4.4-4.6)
+9. Wrap I2P SAM in Interface trait
+10. Implement Resource transfer system
+11. Update shell-proto for Link-based communication
+12. Test interoperability with Python Reticulum

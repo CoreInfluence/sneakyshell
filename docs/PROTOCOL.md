@@ -5,9 +5,20 @@
 The Reticulum-Shell protocol defines the wire format and message exchange patterns for remote shell access over the Reticulum network.
 
 **Protocol Version:** 1
-**Transport:** Reticulum over I2P
+**Transport:** Reticulum Links (over I2P or other interfaces)
 **Serialization:** Bincode (binary)
 **Encoding:** Big-endian
+
+## Transport Layer
+
+Shell messages are sent over established **Reticulum Links**:
+
+1. Client establishes Link to server Destination (3-packet handshake)
+2. Link provides encrypted bidirectional channel with forward secrecy
+3. Shell messages sent as DATA packets over the Link
+4. See [RETICULUM.md](RETICULUM.md) for full Reticulum protocol specification
+
+**Note:** The shell protocol messages below are transmitted as the payload of Reticulum Link DATA packets. Connection establishment uses Reticulum's native LINKREQUEST/PROOF mechanism, not the legacy CONNECT/ACCEPT shown below (retained for backward compatibility during migration).
 
 ## Message Framing
 
@@ -298,9 +309,12 @@ Client                          Server
 
 ### Encryption
 
-- **Reticulum Layer:** End-to-end encryption of all packets
+- **Reticulum Link Layer:** Forward-secret encryption via X25519 ECDH + HKDF
+- **Token Cipher:** AES-256-CBC + HMAC-SHA256 for Link packets
 - **I2P Layer:** Anonymous routing with garlic encryption
-- **Combined:** Defense-in-depth approach
+- **Combined:** Defense-in-depth approach with multiple encryption layers
+
+See [RETICULUM.md](RETICULUM.md) for full cryptographic details.
 
 ### Input Validation
 

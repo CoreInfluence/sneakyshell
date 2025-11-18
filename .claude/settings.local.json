@@ -19,7 +19,9 @@
       "Bash(cargo doc:*)",
       "Bash(chmod:*)",
       "Bash(find:*)",
-      "Bash(timeout 120 ./target/release/shell-server:*)"
+      "Bash(timeout 120 ./target/release/shell-server:*)",
+      "WebFetch(domain:reticulum.network)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

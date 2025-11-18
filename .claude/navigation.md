@@ -111,23 +111,27 @@ reticulum-shell/
 ## Module Responsibilities
 
 ### reticulum-core
-**Purpose:** Low-level Reticulum networking over I2P
-- Identity creation and management
-- Packet encoding/decoding
-- Network interface abstraction (MockInterface for testing, I2pInterface for production)
-- SAM v3 protocol client for I2P router communication
+**Purpose:** Full Reticulum protocol implementation
+- Dual-keypair identity system (X25519 + Ed25519)
+- Complete packet wire format (DATA, ANNOUNCE, LINKREQUEST, PROOF)
+- Link establishment with forward secrecy
+- Transport layer with path/link tables
+- Interface abstraction (I2P, TCP, UDP, Local)
+- SAM v3 protocol client for I2P
 - Embedded I2P router integration (optional feature)
-- Connection lifecycle
 
-**Key Types:**
-- `Identity` - Reticulum identity (public/private keypair)
-- `Packet` - Network packet structure
-- `NetworkInterface` - Trait for transport abstraction
-- `MockInterface` - In-memory testing interface
+**Key Types (Planned):**
+- `Identity` - X25519 + Ed25519 dual-keypair with 128-bit hash address
+- `Destination` - Named endpoint with type (SINGLE, GROUP, PLAIN, LINK)
+- `Packet` - Network packet with header, addresses, context, data
+- `Link` - Encrypted bidirectional channel with state machine
+- `Transport` - Core routing with path table, link table, announce table
+- `Resource` - Large data transfer with chunking and compression
+- `Interface` - Trait for transport abstraction
 - `I2pInterface` - I2P transport layer via SAM protocol
+- `TcpInterface` - TCP transport with HDLC framing (planned)
 - `SamConnection` - Low-level SAM v3 client
-- `EmbeddedRouter` - Emissary-based embedded I2P router (feature: embedded-router)
-- `Destination` - Reticulum destination address
+- `EmbeddedRouter` - Emissary-based embedded I2P router
 
 ### shell-proto
 **Purpose:** Wire protocol definitions shared between client and server
@@ -144,27 +148,27 @@ reticulum-shell/
 
 ### shell-server
 **Purpose:** Server-side logic for listening and executing commands
-- Listen for incoming connections
-- Authenticate clients
+- Create Reticulum Destination and announce
+- Accept incoming Link requests
 - Execute shell commands
-- Manage client sessions
+- Manage client Links and sessions
 
 **Key Types:**
-- `Server` - Main server struct
-- `Session` - Per-client session
+- `Server` - Main server struct with Destination
+- `Session` - Per-client session over Link
 - `CommandExecutor` - Runs commands safely
 - `ServerConfig` - Configuration
 
 ### shell-client
 **Purpose:** Client-side logic for connecting and sending commands
-- Connect to server
-- Interactive command REPL
+- Establish Link to server Destination
+- Interactive command REPL over Link
 - Display command output
-- Handle disconnections
+- Handle Link disconnections
 
 **Key Types:**
 - `Client` - Main client struct
-- `Connection` - Server connection
+- `Link` - Connection to server (via reticulum-core)
 - `Repl` - Interactive shell
 - `ClientConfig` - Configuration
 
@@ -257,3 +261,12 @@ error!(error = ?e, "Command failed");
 2. For SAM protocol: Edit `reticulum-core/src/sam.rs`
 3. For embedded router: Edit `reticulum-core/src/embedded_router.rs`
 4. Test with integration tests in `reticulum-core/tests/`
+
+### Implementing Reticulum Protocol Components
+1. For identity system: Create `reticulum-core/src/identity.rs` (dual-keypair)
+2. For packet format: Create `reticulum-core/src/packet.rs` (wire format)
+3. For link establishment: Create `reticulum-core/src/link.rs` (state machine)
+4. For transport/routing: Create `reticulum-core/src/transport.rs` (path table)
+5. For resources: Create `reticulum-core/src/resource.rs` (chunking)
+6. Add crypto dependencies to `Cargo.toml` (x25519-dalek, hkdf, aes, cbc, hmac)
+7. Test wire format compatibility with Python Reticulum

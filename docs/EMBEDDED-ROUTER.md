@@ -138,21 +138,22 @@ INFO  The router will continue building tunnels in the background
 INFO  I2P router initialization complete
 INFO  Connecting to embedded router via SAM...
 INFO  I2P interface created successfully
-INFO  I2P destination: ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789...
-INFO  I2P destination hash: 1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890
+INFO  I2P destination: jWQnSctWzWmLkboVVlRaQmgn5AaMo3uxGQx3H4sxUK7jAiFRKhjj...  ← COPY THIS!
+INFO  I2P destination hash: 454fc6243fc04b9874359ad6267a7df24afcb3732697af129fa5e34565deedba
+INFO  Server destination: 9795adcdb0156d76afb40e545382e5423ec16e094911fb88689cd91b171fcced
 INFO  Listening on Reticulum network...
 ```
 
-**⚠️ IMPORTANT:** Save the I2P destination (base64 string) - clients need this to connect!
+**⚠️ IMPORTANT:** Copy the "I2P destination" (long base64 string), NOT the "Server destination" (hex hash)!
 
 ### 2. Start Client with Embedded Router
 
 ```bash
-# Start client (use server's I2P destination)
+# Start client (use server's I2P destination - the LONG base64 string!)
 ./target/release/shell-client \
   --enable-i2p \
   --use-embedded-router \
-  --i2p-destination "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789..."
+  --i2p-destination "jWQnSctWzWmLkboVVlRaQmgn5AaMo3uxGQx3H4sxUK7jAiFRKhjj..."
 
 # Client will:
 # 1. Download router infos from reseed servers (30-60 seconds)
@@ -605,6 +606,41 @@ INFO  First-time bootstrap may take 2-5 minutes while finding peers
    - Subsequent runs are much faster (30-90 seconds) using cached peer information
    - Router needs to discover peers
    - Be patient on initial startup
+
+### Invalid SAM Command / Client Not Connecting
+
+**Symptom:**
+```
+WARN invalid sam command command=DATAGRAM SEND ... DESTINATION=9795adcd...
+```
+
+**Cause:** Using the wrong destination string!
+
+**❌ WRONG - Using "Server destination" (Reticulum hash):**
+```bash
+# This is the Reticulum identity hash, NOT the I2P destination!
+--i2p-destination "9795adcdb0156d76afb40e545382e5423ec16e094911fb88689cd91b171fcced"
+```
+
+**✅ CORRECT - Using "I2P destination" (long base64 string):**
+```bash
+# This is the I2P destination (516+ bytes in base64 format)
+--i2p-destination "jWQnSctWzWmLkboVVlRaQmgn5AaMo3uxGQx3H4sxUK7jAiFRKhjjpmc1co6IWVr702X3et2YMZcxfj2vvOfkbyPRbqKE3eGa22qUntBRVzELpa4JeXtTZ~8L~VnRo8GT..."
+```
+
+**How to identify the correct destination:**
+
+From server output, look for these lines:
+```
+INFO  I2P destination: jWQnSctWzWmLkboVVlRa...  ← USE THIS (long base64)
+INFO  I2P destination hash: 454fc6243fc04b9874...  (internal use only)
+INFO  Server destination: 9795adcdb0156d76afb4...  (Reticulum identity, NOT I2P!)
+```
+
+**Key differences:**
+- **I2P destination:** 500-800 characters, base64 encoded, contains `~` and `-` characters
+- **Server destination:** 64 characters, hex encoded (0-9, a-f only)
+- **I2P destination hash:** 64 characters, hex encoded (SHA-256 of I2P destination)
 
    ```bash
    # Enable debug logging to see progress
